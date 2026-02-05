@@ -1,0 +1,8 @@
+{
+  "name": "Faithlify",
+  "description": "A faith-centered digital platform connecting believers and verified churches through community, media, and Scripture.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
