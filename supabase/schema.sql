@@ -12,6 +12,11 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   avatar_url TEXT,
   role TEXT DEFAULT 'user' CHECK (role IN ('user', 'moderator', 'church_admin', 'admin')),
+  username TEXT UNIQUE,
+  bio TEXT,
+  website TEXT,
+  is_public BOOLEAN DEFAULT TRUE,
+  theme_preference TEXT DEFAULT 'system',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -133,6 +138,34 @@ CREATE TABLE IF NOT EXISTS user_follows (
   PRIMARY KEY (follower_id, following_id)
 );
 
+-- Post Comments
+CREATE TABLE IF NOT EXISTS post_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Reports
+CREATE TABLE IF NOT EXISTS reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  target_type TEXT CHECK (target_type IN ('post', 'chat', 'user', 'message')),
+  target_id UUID NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'dismissed')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- User Blocks
+CREATE TABLE IF NOT EXISTS user_blocks (
+  blocker_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  blocked_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (blocker_id, blocked_id)
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
@@ -239,6 +272,30 @@ CREATE POLICY "Follows are viewable by everyone" ON user_follows FOR SELECT USIN
 CREATE POLICY "Users can follow others" ON user_follows FOR INSERT WITH CHECK (true);
 CREATE POLICY "Users can unfollow" ON user_follows FOR DELETE USING (
   follower_id IN (SELECT id FROM users WHERE auth0_id = auth.uid()::text)
+);
+
+-- Post Comments: Everyone can read, authenticated can comment
+CREATE POLICY "Comments are viewable by everyone" ON post_comments FOR SELECT USING (true);
+CREATE POLICY "Users can comment" ON post_comments FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can delete own comments" ON post_comments FOR DELETE USING (
+  user_id IN (SELECT id FROM users WHERE auth0_id = auth.uid()::text)
+);
+
+-- Reports: Only reporters can view (or admins), users can create
+CREATE POLICY "Users can report" ON reports FOR INSERT WITH CHECK (true);
+CREATE POLICY "Admins can view reports" ON reports FOR SELECT USING (
+  EXISTS(SELECT 1 FROM users WHERE auth0_id = auth.uid()::text AND role IN ('admin', 'moderator'))
+);
+
+-- User Blocks: Users can view their own blocks
+CREATE POLICY "Users can view own blocks" ON user_blocks FOR SELECT USING (
+  blocker_id IN (SELECT id FROM users WHERE auth0_id = auth.uid()::text)
+);
+CREATE POLICY "Users can block" ON user_blocks FOR INSERT WITH CHECK (
+  blocker_id IN (SELECT id FROM users WHERE auth0_id = auth.uid()::text)
+);
+CREATE POLICY "Users can unblock" ON user_blocks FOR DELETE USING (
+  blocker_id IN (SELECT id FROM users WHERE auth0_id = auth.uid()::text)
 );
 
 -- Enable realtime for messages

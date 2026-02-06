@@ -151,3 +151,38 @@ export async function unfollowUser(followerId: string, followingId: string): Pro
 
     return !error;
 }
+
+// Block user
+export async function blockUser(blockerId: string, blockedId: string): Promise<boolean> {
+    const { error } = await supabase
+        .from('user_blocks')
+        .insert({ blocker_id: blockerId, blocked_id: blockedId });
+
+    return !error;
+}
+
+// Unblock user
+export async function unblockUser(blockerId: string, blockedId: string): Promise<boolean> {
+    const { error } = await supabase
+        .from('user_blocks')
+        .delete()
+        .eq('blocker_id', blockerId)
+        .eq('blocked_id', blockedId);
+
+    return !error;
+}
+
+// Get blocked users
+export async function getBlockedUsers(userId: string): Promise<User[]> {
+    const { data, error } = await supabase
+        .from('user_blocks')
+        .select('blocked:users!blocked_id(*)')
+        .eq('blocker_id', userId);
+
+    if (error) {
+        console.error('Error fetching blocked users:', error);
+        return [];
+    }
+
+    return (data || []).map((d: any) => d.blocked).filter(Boolean);
+}

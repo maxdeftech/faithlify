@@ -28,6 +28,10 @@ export function usePosts(userId?: string) {
         return post;
     };
 
+    const uploadPostMedia = async (file: File) => {
+        return await postService.uploadMedia(file);
+    };
+
     const toggleLike = async (postId: string, isLiked: boolean) => {
         if (!userId) return;
         if (isLiked) await postService.unlikePost(postId, userId);
@@ -35,7 +39,14 @@ export function usePosts(userId?: string) {
         await fetchPosts();
     };
 
-    return { posts, loading, createPost, toggleLike, refetch: fetchPosts };
+    const removePost = async (postId: string) => {
+        // Optimistic update
+        setPosts(current => current.filter(p => p.id !== postId));
+        const success = await postService.deletePost(postId);
+        if (!success) await fetchPosts(); // Revert if failed
+    };
+
+    return { posts, loading, createPost, removePost, uploadPostMedia, toggleLike, refetch: fetchPosts };
 }
 
 // Churches hook
@@ -113,7 +124,13 @@ export function useChats(userId?: string) {
         await fetchChats();
     };
 
-    return { chats, loading, createChat, deleteChat, archiveChat, refetch: fetchChats };
+    const addMember = async (chatId: string, userId: string) => {
+        await messageService.addParticipant(chatId, userId);
+        // refresh
+        await fetchChats();
+    }
+
+    return { chats, loading, createChat, deleteChat, archiveChat, addMember, refetch: fetchChats };
 }
 
 // Messages hook with real-time
@@ -210,3 +227,22 @@ export function useAllUsers() {
 
     return users;
 }
+
+// Devotionals hook (Added in Phase 3)
+export function useDevotionals() {
+    const [devotionals, setDevotionals] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        // Dynamic import to avoid circular dependency if service imports types differently
+        import('../services/devotionalService').then(async (service) => {
+            const data = await service.getAllDevotionals();
+            setDevotionals(data);
+            setLoading(false);
+        });
+    }, []);
+
+    return { devotionals, loading };
+}
+
+

@@ -30,23 +30,23 @@ import {
   Archive,
   Settings,
   ShieldAlert,
-  Loader2
+  Loader2,
+  Image as ImageIcon
 } from 'lucide-react';
 import { AppView } from './types';
-import { BIBLE_BOOKS, MOCK_DEVOTIONALS } from './constants';
+import { BIBLE_BOOKS } from './constants';
 import { GoogleGenAI, Type } from "@google/genai";
 import { useAuth } from './src/contexts/AuthContext';
-import { usePosts, useChurches, useChats, useMessages, useReadingPlans, useBookmarks, useAllUsers } from './src/hooks/useSupabase';
+import { usePosts, useChurches, useChats, useMessages, useReadingPlans, useBookmarks, useAllUsers, useDevotionals } from './src/hooks/useSupabase';
+import { GlassCard } from './src/components/GlassCard';
+import { FeedPost } from './src/components/FeedPost';
+import { EditProfileModal } from './src/components/EditProfileModal';
+import { AdminReportsPanel } from './src/components/AdminReportsPanel';
+import { ReportModal } from './src/components/ReportModal';
 
 // UI Components
-const GlassCard: React.FC<{ children: React.ReactNode; className?: string; onClick?: () => void }> = ({ children, className = "", onClick }) => (
-  <div
-    onClick={onClick}
-    className={`glass rounded-2xl p-4 transition-all duration-300 ${onClick ? 'cursor-pointer hover:bg-white/10' : ''} ${className}`}
-  >
-    {children}
-  </div>
-);
+// UI Components removed GlassCard as it's imported now
+
 
 const Badge: React.FC<{ count: number }> = ({ count }) => (
   count > 0 ? (
@@ -147,11 +147,12 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Supabase data hooks
-  const { posts, loading: postsLoading, createPost, toggleLike } = usePosts(user?.id);
+  const { posts, loading: postsLoading, createPost, removePost, uploadPostMedia, toggleLike } = usePosts(user?.id);
   const { churches, pendingChurches, loading: churchesLoading, joinChurch, leaveChurch, verifyChurch, rejectChurch } = useChurches(user?.id);
-  const { chats, loading: chatsLoading, createChat, deleteChat: deleteChatAction, archiveChat } = useChats(user?.id);
+  const { chats, loading: chatsLoading, createChat, deleteChat: deleteChatAction, archiveChat, addMember } = useChats(user?.id);
   const { plans: readingPlans, loading: plansLoading, createPlan, toggleSubscription } = useReadingPlans(user?.id);
   const { bookmarks: bookmarkedVerses, toggleBookmark } = useBookmarks(user?.id);
+  const { devotionals, loading: devosLoading } = useDevotionals();
   const allUsers = useAllUsers();
 
   // Local UI state
@@ -172,6 +173,21 @@ const App: React.FC = () => {
     chapter: 3,
     verses: []
   });
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [activeAdminTab, setActiveAdminTab] = useState<'verification' | 'reports'>('verification');
+  const [reportData, setReportData] = useState<{ type: 'chat' | 'post' | 'user' | 'message', id: string } | null>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
 
   // Messages for active chat
   const { messages: chatMessages, sendMessage } = useMessages(activeChatId, user?.id);
@@ -201,7 +217,7 @@ const App: React.FC = () => {
     const fetchDailyVerse = async () => {
       try {
         // Fix: Use new GoogleGenAI instance for API call following guidelines
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
         const response = await ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: "Provide an inspiring KJV Bible verse for today with its reference. Format: JSON with 'text' and 'reference' keys.",
@@ -242,7 +258,7 @@ const App: React.FC = () => {
     setPlanGenLoading(true);
     try {
       // Fix: Use new GoogleGenAI instance for API call following guidelines
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Create a 5-day Bible reading plan for the topic: "${newPlan.title}". Format: JSON with 'description' and 'verses' (array of strings like "John 3:16").`,
@@ -307,34 +323,53 @@ const App: React.FC = () => {
                     <img src={user?.avatar_url || 'https://ui-avatars.com/api/?name=User'} className="w-10 h-10 rounded-full" alt="" />
                     <div className="flex-1">
                       <textarea value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} placeholder="What's on your heart?" className="w-full bg-transparent border-none focus:ring-0 text-slate-100 placeholder:text-slate-500 resize-none h-16" />
+
+                      {previewUrl && (
+                        <div className="relative mb-4 inline-block">
+                          <img src={previewUrl} alt="Preview" className="h-32 rounded-xl object-cover border border-white/10" />
+                          <button
+                            onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}
+                            className="absolute -top-2 -right-2 bg-slate-900 rounded-full p-1 text-slate-400 hover:text-white border border-white/10"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+
                       <div className="flex justify-between items-center pt-2 border-t border-white/5">
-                        <button className="p-2 hover:bg-white/5 rounded-full transition-colors"><PlusCircle size={20} className="text-blue-400" /></button>
+                        <div className="flex gap-2">
+                          <label className="p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer text-slate-400 hover:text-blue-400">
+                            <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                            <ImageIcon size={20} />
+                          </label>
+                        </div>
                         <button onClick={async () => {
-                          if (user && newPostContent.trim()) {
-                            await createPost(newPostContent);
+                          if (user && (newPostContent.trim() || selectedFile)) {
+                            let mediaUrl = undefined;
+                            if (selectedFile) {
+                              mediaUrl = await uploadPostMedia(selectedFile);
+                              if (!mediaUrl && !newPostContent.trim()) return; // Failed upload and no text
+                            }
+
+                            await createPost(newPostContent, mediaUrl, selectedFile ? 'image' : undefined);
                             setNewPostContent('');
+                            setSelectedFile(null);
+                            setPreviewUrl(null);
                           }
-                        }} disabled={!newPostContent.trim()} className="bg-gradient-accent px-6 py-1.5 rounded-full font-bold text-sm">Post</button>
+                        }} disabled={!newPostContent.trim() && !selectedFile} className="bg-gradient-accent px-6 py-1.5 rounded-full font-bold text-sm">Post</button>
                       </div>
                     </div>
                   </div>
                 </GlassCard>
                 {posts.map(post => (
-                  <GlassCard key={post.id} className="mb-6 border-white/5 group">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <img src={post.user?.avatar_url || ''} className="w-10 h-10 rounded-full" />
-                        <div><h3 className="font-semibold">{post.user?.name}</h3><p className="text-xs text-slate-400">{new Date(post.created_at).toLocaleDateString()}</p></div>
-                      </div>
-                    </div>
-                    <p className="text-slate-200 mb-4 whitespace-pre-wrap">{post.content}</p>
-                    <div className="flex items-center gap-6 pt-2 border-t border-white/5 text-slate-400">
-                      <button onClick={() => toggleLike(post.id, post.isLiked || false)} className={`flex items-center gap-2 ${post.isLiked ? 'text-pink-500' : ''}`}><Heart size={18} fill={post.isLiked ? 'currentColor' : 'none'} /><span className="text-sm">{post.likes_count}</span></button>
-                      <button className="flex items-center gap-2 hover:text-blue-400"><MessageCircle size={18} /></button>
-                      <button className="flex items-center gap-2 hover:text-purple-400"><Share2 size={18} /></button>
-                    </div>
-                  </GlassCard>
+                  <FeedPost
+                    key={post.id}
+                    post={post}
+                    onLike={toggleLike}
+                    onDelete={removePost}
+                  />
                 ))}
+
               </>
             )}
           </div>
@@ -364,7 +399,23 @@ const App: React.FC = () => {
                   <div key={v.v} className="group relative">
                     <span className="text-xs text-blue-400 mr-3 align-top font-sans font-bold">{v.v}</span>
                     <span className="cursor-pointer hover:text-white transition-colors" onClick={() => toggleBookmark(`${bibleContent.book} ${bibleContent.chapter}:${v.v}`)}>{v.t}</span>
-                    {bookmarkedVerses.includes(`${bibleContent.book} ${bibleContent.chapter}:${v.v}`) && <Bookmark className="inline-block ml-2 w-4 h-4 text-blue-400 fill-current" />}
+                    <div className="inline-flex ml-2 gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {bookmarkedVerses.includes(`${bibleContent.book} ${bibleContent.chapter}:${v.v}`) ? (
+                        <Bookmark className="w-4 h-4 text-blue-400 fill-current" />
+                      ) : (
+                        <button onClick={() => toggleBookmark(`${bibleContent.book} ${bibleContent.chapter}:${v.v}`)} className="text-slate-500 hover:text-blue-400"><Bookmark size={14} /></button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setNewPostContent(`"${v.t}" - ${bibleContent.book} ${bibleContent.chapter}:${v.v}`);
+                          setCurrentView(AppView.FEED);
+                        }}
+                        className="text-slate-500 hover:text-green-400"
+                        title="Share to Feed"
+                      >
+                        <Share2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -441,12 +492,12 @@ const App: React.FC = () => {
                 <div className="flex justify-between items-end mb-6">
                   <img src={user?.avatar_url || 'https://ui-avatars.com/api/?name=User'} className="w-32 h-32 rounded-3xl border-4 border-slate-950 shadow-2xl" />
                   <div className="flex gap-2">
-                    <button className="px-6 py-2.5 rounded-xl font-bold text-sm bg-white/10 border border-white/10">Edit</button>
+                    <button onClick={() => setIsEditingProfile(true)} className="px-6 py-2.5 rounded-xl font-bold text-sm bg-white/10 border border-white/10 hover:bg-white/15 transition-colors">Edit Profile</button>
                     <button onClick={logout} className="px-6 py-2.5 rounded-xl font-bold text-sm bg-red-500/10 text-red-500 border border-red-500/20">Sign Out</button>
                   </div>
                 </div>
                 <h1 className="text-3xl font-bold text-slate-100">{user?.name}</h1>
-                <p className="text-slate-400 mb-6">Walking by faith, not by sight.</p>
+                <p className="text-slate-400 mb-6">{user?.bio || 'Walking by faith, not by sight.'}</p>
                 <div className="flex gap-10 pt-6 border-t border-white/5">
                   <div className="text-center">
                     <p className="text-2xl font-bold text-slate-100">0</p>
@@ -484,6 +535,8 @@ const App: React.FC = () => {
                 ))}
               </section>
             </div>
+
+            <EditProfileModal isOpen={isEditingProfile} onClose={() => setIsEditingProfile(false)} />
           </div>
         );
 
@@ -491,9 +544,14 @@ const App: React.FC = () => {
         return (
           <div className="max-w-4xl mx-auto py-6 px-4">
             <h1 className="text-3xl font-bold text-gradient mb-8">Daily Devotionals</h1>
-            {MOCK_DEVOTIONALS.map(devo => (
+            <h1 className="text-3xl font-bold text-gradient mb-8">Daily Devotionals</h1>
+            {devosLoading ? (
+              <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-blue-400" /></div>
+            ) : devotionals.length === 0 ? (
+              <div className="text-center p-12 text-slate-500">No devotionals for today.</div>
+            ) : devotionals.map(devo => (
               <GlassCard key={devo.id} className="mb-8 p-0 overflow-hidden border-none shadow-2xl">
-                <img src={devo.image} className="w-full h-64 object-cover" />
+                <img src={devo.image || 'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?w=800&q=80'} className="w-full h-64 object-cover" />
                 <div className="p-8">
                   <div className="flex items-center gap-2 mb-4 text-blue-400 text-sm font-bold uppercase tracking-wider"><Sun className="w-4 h-4" /> Today's Reflection</div>
                   <h2 className="text-3xl font-bold mb-4">{devo.title}</h2>
@@ -574,8 +632,29 @@ const App: React.FC = () => {
                         );
                       })()}
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={async () => { setActiveChatId(null); await deleteChatAction(activeChatId!); }} className="p-2 text-slate-500 hover:text-red-500 transition-colors"><Trash2 size={20} /></button>
+
+                    <div className="flex gap-2 relative group">
+                      <button className="p-2 text-slate-500 hover:text-white transition-colors rounded-full hover:bg-white/5"><Settings size={20} /></button>
+                      <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-2 z-50 hidden group-hover:block nav-dropdown animate-in zoom-in-95">
+                        {activeChat.is_group && (
+                          <button
+                            onClick={() => {
+                              const userId = prompt("Enter User ID to add:"); // Simple prompt for now
+                              if (userId) addMember(activeChat.id, userId);
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-white/10 rounded-lg text-sm font-bold flex items-center gap-2"
+                          >
+                            <Users size={14} className="text-blue-400" /> Add Member
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setReportData({ type: 'chat', id: activeChat.id })}
+                          className="w-full text-left px-4 py-2 hover:bg-white/10 rounded-lg text-sm font-bold flex items-center gap-2 text-red-400 hover:text-red-300"
+                        >
+                          <ShieldAlert size={14} /> Report Chat
+                        </button>
+                        <button onClick={async () => { setActiveChatId(null); await deleteChatAction(activeChatId!); }} className="w-full text-left px-4 py-2 hover:bg-white/10 rounded-lg text-sm font-bold flex items-center gap-2 text-red-400 hover:text-red-300"><Trash2 size={14} /> Delete Chat</button>
+                      </div>
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
@@ -598,7 +677,7 @@ const App: React.FC = () => {
                 </>
               )}
             </div>
-          </div>
+          </div >
         );
 
       case AppView.CHURCHES:
@@ -632,21 +711,42 @@ const App: React.FC = () => {
       case AppView.ADMIN_PANEL:
         return (
           <div className="max-w-4xl mx-auto py-12 px-4">
-            <h1 className="text-3xl font-bold mb-8 flex items-center gap-3"><ShieldAlert className="text-red-500" /> Verification Panel</h1>
-            <div className="space-y-4">
-              {pendingChurches.map(c => (
-                <GlassCard key={c.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center font-bold text-blue-400">{c.name[0]}</div>
-                    <div><h3 className="font-bold text-slate-100">{c.name}</h3><p className="text-xs text-slate-500">{c.admin_email}</p></div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => verifyChurch(c.id)} className="px-4 py-2 bg-green-500/10 text-green-500 rounded-lg text-xs font-bold hover:bg-green-500/20 transition-all">Verify</button>
-                    <button onClick={() => rejectChurch(c.id)} className="px-4 py-2 bg-red-500/10 text-red-500 rounded-lg text-xs font-bold hover:bg-red-500/20 transition-all">Reject</button>
-                  </div>
-                </GlassCard>
-              ))}
+            <h1 className="text-3xl font-bold mb-8 flex items-center gap-3"><ShieldAlert className="text-red-500" /> Admin Control</h1>
+
+            <div className="flex gap-6 mb-8 border-b border-white/5">
+              <button
+                onClick={() => setActiveAdminTab('verification')}
+                className={`pb-4 text-sm font-bold transition-all border-b-2 ${activeAdminTab === 'verification' ? 'border-red-500 text-white' : 'border-transparent text-slate-500 hover:text-white'}`}
+              >
+                Church Verification
+              </button>
+              <button
+                onClick={() => setActiveAdminTab('reports')}
+                className={`pb-4 text-sm font-bold transition-all border-b-2 ${activeAdminTab === 'reports' ? 'border-red-500 text-white' : 'border-transparent text-slate-500 hover:text-white'}`}
+              >
+                Reports
+              </button>
             </div>
+
+            {activeAdminTab === 'verification' ? (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold mb-4 text-slate-400">Pending Churches ({pendingChurches.length})</h2>
+                {pendingChurches.length === 0 ? <p className="text-slate-500 italic">No pending verifications.</p> : pendingChurches.map(c => (
+                  <GlassCard key={c.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center font-bold text-blue-400">{c.name[0]}</div>
+                      <div><h3 className="font-bold text-slate-100">{c.name}</h3><p className="text-xs text-slate-500">{c.admin_email}</p></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => verifyChurch(c.id)} className="px-4 py-2 bg-green-500/10 text-green-500 rounded-lg text-xs font-bold hover:bg-green-500/20 transition-all">Verify</button>
+                      <button onClick={() => rejectChurch(c.id)} className="px-4 py-2 bg-red-500/10 text-red-500 rounded-lg text-xs font-bold hover:bg-red-500/20 transition-all">Reject</button>
+                    </div>
+                  </GlassCard>
+                ))}
+              </div>
+            ) : (
+              <AdminReportsPanel />
+            )}
           </div>
         );
 

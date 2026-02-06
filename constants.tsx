@@ -141,17 +141,7 @@ export const BIBLE_BOOKS = [
   'Hebrews', 'James', '1 Peter', '2 Peter', '1 John', '2 John', '3 John', 'Jude', 'Revelation'
 ];
 
-export const MOCK_DEVOTIONALS: Devotional[] = [
-  {
-    id: 'd1',
-    title: 'Strength in Stillness',
-    content: 'In our fast-paced world, we often forget the power of quiet time with God. Today, take 5 minutes to just listen...',
-    author: 'Pastor Mike',
-    churchId: 'c1',
-    date: 'Today',
-    image: 'https://picsum.photos/seed/devo1/800/400'
-  }
-];
+
 
 export const MOCK_READING_PLANS: ReadingPlan[] = [
   {

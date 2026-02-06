@@ -9,7 +9,8 @@ export enum AppView {
   DEVO = 'devo',
   MESSAGES = 'messages',
   READING_PLANS = 'reading_plans',
-  ADMIN_PANEL = 'admin_panel'
+  ADMIN_PANEL = 'admin_panel',
+  SETTINGS = 'settings'
 }
 
 export interface User {
@@ -103,4 +104,69 @@ export interface Chat {
   groupAvatar?: string;
   admins?: string[]; // User IDs who are admins of the group
   isArchived?: boolean;
+}
+
+export interface PostComment {
+  id: string;
+  postId: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  content: string;
+  createdAt: string;
+}
+
+export type ReportReason = 'spam' | 'harassment' | 'inappropriate' | 'misinformation' | 'scam' | 'other';
+export type ReportStatus = 'pending' | 'reviewed' | 'resolved' | 'dismissed';
+
+export interface PostReport {
+  id: string;
+  postId: string;
+  reporterId: string;
+  reason: ReportReason;
+  details?: string;
+  status: ReportStatus;
+  createdAt: string;
+}
+
+export interface ChatReport {
+  id: string;
+  chatId: string;
+  reporterId: string;
+  reportedUserId: string;
+  reason: ReportReason;
+  details?: string;
+  status: ReportStatus;
+  createdAt: string;
+}
+
+export interface BlockedUser {
+  id: string;
+  blockerId: string;
+  blockedId: string;
+  blockedUser?: User;
+  createdAt: string;
+}
+
+export type FriendshipStatus = 'pending' | 'accepted' | 'rejected';
+
+export interface Friendship {
+  id: string;
+  userId: string;
+  friendId: string;
+  status: FriendshipStatus;
+  friend?: User;
+  createdAt: string;
+}
+
+export interface UserSettings {
+  theme: 'light' | 'dark';
+  isPrivate: boolean;
+  notificationsEnabled: boolean;
+}
+
+export interface ChatParticipantPermissions {
+  can_add_members: boolean;
+  can_remove_members: boolean;
+  can_edit_info: boolean;
 }

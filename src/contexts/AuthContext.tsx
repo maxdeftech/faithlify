@@ -22,6 +22,11 @@ const MOCK_USER: User = {
     name: 'John Doe',
     avatar_url: 'https://picsum.photos/seed/user1/200/200',
     role: 'admin',
+    username: 'admin',
+    bio: 'Faithlify Admin',
+    website: 'https://faithlify.com',
+    is_public: true,
+    theme_preference: 'system',
     created_at: new Date().toISOString(),
 };
 
@@ -46,8 +51,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     picture: auth0.user.picture,
                 });
                 setDbUser(user);
-            } else if (!auth0Configured && mockLoggedIn) {
-                setDbUser(MOCK_USER);
+            } else if (!auth0Configured && import.meta.env.DEV) {
+                // Only allow mock in strictly DEV environment if needed, or remove entirely. 
+                // Removing entirely for safety as requested.
+                console.warn("Auth0 not configured and Mock User fallback removed for security.");
+                setDbUser(null);
             }
         };
         syncUser();

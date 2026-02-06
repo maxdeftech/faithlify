@@ -176,6 +176,19 @@ export async function createChat(participantIds: string[], isGroup = false, grou
     return chat as Chat;
 }
 
+// Add participant to group chat
+export async function addParticipant(chatId: string, userId: string, isAdmin = false): Promise<boolean> {
+    const { error } = await supabase
+        .from('chat_participants')
+        .insert({
+            chat_id: chatId,
+            user_id: userId,
+            is_admin: isAdmin,
+        });
+
+    return !error;
+}
+
 // Find existing 1-on-1 chat between two users
 export async function findExistingChat(userId1: string, userId2: string): Promise<Chat | null> {
     // Get all non-group chats for user1
